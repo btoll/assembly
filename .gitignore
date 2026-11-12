@@ -1,0 +1,7 @@
+*.[oa]
+*.out
+*~
+*.log
+*.json
+vuln.table
+

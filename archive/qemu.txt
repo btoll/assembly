@@ -1,0 +1,47 @@
+$ sudo apt-get update
+$ sudo apt install qemu-system qemu-utils qemu-efi
+https://cloud.debian.org/images/cloud/
+$ wget -O debian-arm64.img \
+  https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-arm64-2026xxxx-xxxx.tar.xz
+tar -xJf debian-12-genericcloud-arm64-*.tar.xz
+# if disk.raw extracted:
+qemu-img convert -f raw -O qcow2 disk.raw debian-arm64.qcow2
+# or if you have a .img already:
+qemu-img convert -O qcow2 debian-arm64.img debian-arm64.qcow2
+
+cat > user-data <<'EOF'
+#cloud-config
+users:
+  - name: debian
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh-authorized-keys:
+      - ssh-rsa AAAA... your_pubkey
+    shell: /bin/bash
+chpasswd:
+  list: |
+    debian:changeme
+  expire: False
+ssh_pwauth: false
+hostname: debian-qemu-arm64
+EOF
+
+cat > meta-data <<'EOF'
+instance-id: debian-qemu-arm64-1
+local-hostname: debian-qemu-arm64
+EOF
+
+cloud-localds seed.iso user-data meta-data
+
+qemu-system-aarch64 \
+  -machine virt,highmem=off \
+  -cpu cortex-a72 -smp 2 -m 3072 \
+  -drive if=none,file=debian-arm64.qcow2,id=hd0,format=qcow2 \
+  -device virtio-blk-device,drive=hd0 \
+  -device virtio-net-device,netdev=usernet \
+  -netdev user,id=usernet,hostfwd=tcp::2222-:22 \
+  -bios /usr/share/qemu-efi-aarch64/QEMU_EFI.fd \
+  -drive if=cdrom,file=seed.iso,format=raw \
+  -nographic
+
+ssh -p 2222 debian@localhost
+
